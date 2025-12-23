@@ -1,1116 +1,549 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Last Touch Loses</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MATRIX-100 | Ultimate Edition</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #05050a;
+            --surface: #0e0e1a;
+            --accent: #00f2ff;
+            --accent-glow: rgba(0, 242, 255, 0.3);
+            --secondary: #7000ff;
+            --text: #e0e6ed;
+            --text-dim: #6b6b83;
+            --danger: #ff0055;
+            --cell-size: clamp(30px, 4.5vh, 50px);
+        }
 
-  <!-- PeerJS CDN -->
-  <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script> <!-- [web:1] -->
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'JetBrains Mono', 'Fira Code', monospace; }
 
-  <style>
-  * {
-    box-sizing: border-box;
-    -webkit-tap-highlight-color: transparent;
-  }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-image: radial-gradient(circle at 50% 50%, #16162d 0%, #05050a 100%);
+        }
 
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    text-align: center;
-    margin: 0;
-    padding: 20px;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
+        /* App Layout */
+        .app-shell {
+            width: 98vw;
+            height: 96vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+            position: relative;
+        }
 
-  .container {
-    background: rgba(255, 255, 255, 0.95);
-    padding: 30px;
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    max-width: 600px;
-    width: 100%;
-  }
+        header {
+            padding: 15px 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
 
-  h1 {
-    margin: 0 0 10px 0;
-    color: #333;
-    font-size: 2em;
-  }
+        .logo { font-size: 1.5rem; font-weight: bold; letter-spacing: 4px; color: var(--accent); }
 
-  .subtitle {
-    color: #666;
-    margin: 0 0 20px 0;
-    font-size: 0.9em;
-  }
+        /* Screens */
+        .screen { display: none; flex: 1; padding: 20px; animation: fadeIn 0.3s ease; }
+        .screen.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-  .screen {
-    display: none;
-  }
+        /* Menu */
+        .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: auto; width: 80%; }
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 40px;
+            text-align: center;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .card:hover { border-color: var(--accent); background: rgba(0, 242, 255, 0.05); transform: translateY(-5px); }
+        .card i { font-size: 3rem; color: var(--accent); margin-bottom: 20px; }
 
-  .screen.active {
-    display: block;
-  }
+        /* Game Screen Layout */
+        .game-layout { display: grid; grid-template-columns: 320px 1fr 320px; gap: 20px; width: 100%; height: 100%; }
 
-  .menu-section {
-    margin: 30px 0;
-  }
+        /* Board */
+        .board-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 10px;
+        }
+        .grid-10 {
+            display: grid;
+            grid-template-columns: repeat(10, var(--cell-size));
+            grid-template-rows: repeat(10, var(--cell-size));
+            gap: 6px;
+        }
+        .cell {
+            background: #1a1a2e;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+        .cell:hover:not(.taken) { border-color: var(--accent); background: rgba(0, 242, 255, 0.1); }
+        .cell.selected { background: var(--accent); box-shadow: 0 0 15px var(--accent); border: none; }
+        .cell.taken { opacity: 0.05; cursor: default; }
 
-  .menu-section h2 {
-    color: #333;
-    margin-bottom: 15px;
-    font-size: 1.5em;
-  }
+        /* Sidebars */
+        .sidebar { display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        .panel {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 15px;
+        }
 
-  .mode-buttons {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    margin-bottom: 20px;
-  }
+        /* AI Thinking Box */
+        .ai-terminal {
+            flex: 1;
+            font-size: 0.75rem;
+            color: #00ff88;
+            background: #050a05;
+            padding: 10px;
+            overflow-y: auto;
+            border: 1px solid #004422;
+            line-height: 1.4;
+        }
+        .ai-terminal p { margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,136,0.1); }
 
-  .mode-btn {
-    padding: 20px;
-    font-size: 1.1em;
-    border: 3px solid transparent;
-    border-radius: 15px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  }
+        /* Difficulty Slider */
+        .slider-container { margin: 10px 0; }
+        .slider {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
 
-  .mode-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
-  }
+        /* Buttons */
+        .btn {
+            padding: 12px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: 0.2s;
+        }
+        .btn-accent { background: var(--accent); color: #000; }
+        .btn-accent:disabled { opacity: 0.2; cursor: not-allowed; }
+        .btn-outline { background: transparent; border: 1px solid var(--text-dim); color: var(--text); }
+        .btn-outline:hover { background: rgba(255,255,255,0.05); }
 
-  .mode-btn:active {
-    transform: translateY(0);
-  }
+        /* Lobby Info */
+        .room-code {
+            background: #000;
+            padding: 10px;
+            text-align: center;
+            font-size: 1.2rem;
+            color: var(--accent);
+            border: 1px dashed var(--accent);
+            margin: 10px 0;
+        }
 
-  .difficulty-display {
-    margin: 30px 0;
-    padding: 25px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 15px;
-    color: white;
-  }
+        /* Overlay */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .overlay.active { display: flex; }
 
-  .difficulty-number {
-    font-size: 4em;
-    font-weight: bold;
-    margin: 0;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-  }
-
-  .difficulty-label {
-    font-size: 1.5em;
-    margin: 10px 0 0 0;
-    font-weight: bold;
-  }
-
-  .difficulty-description {
-    font-size: 0.9em;
-    margin: 5px 0 0 0;
-    opacity: 0.9;
-  }
-
-  .slider-container {
-    margin: 30px 0;
-  }
-
-  .slider {
-    width: 100%;
-    height: 15px;
-    border-radius: 10px;
-    background: linear-gradient(to right, #4caf50, #ffeb3b, #ff9800, #f44336, #9c27b0);
-    outline: none;
-    -webkit-appearance: none;
-    cursor: pointer;
-  }
-
-  .slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-    background: white;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    border: 3px solid #667eea;
-  }
-
-  .slider::-moz-range-thumb {
-    width: 35px;
-    height: 35px;
-    border-radius: 50%;
-    background: white;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    border: 3px solid #667eea;
-  }
-
-  .game-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding: 15px;
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    border-radius: 15px;
-    color: white;
-  }
-
-  .turn-indicator {
-    font-size: 1.2em;
-    font-weight: bold;
-  }
-
-  .moves-counter {
-    font-size: 1em;
-    opacity: 0.9;
-  }
-
-  .ai-commentary {
-    margin: 15px 0;
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-    border-radius: 15px;
-    border-left: 4px solid #667eea;
-    min-height: 80px;
-  }
-
-  .ai-commentary.active {
-    animation: slideIn 0.3s ease;
-  }
-
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .ai-commentary-title {
-    font-weight: bold;
-    color: #667eea;
-    margin-bottom: 8px;
-    font-size: 1.1em;
-  }
-
-  .ai-commentary-text {
-    color: #333;
-    line-height: 1.5;
-    font-size: 0.95em;
-  }
-
-  .win-chance {
-    display: inline-block;
-    padding: 3px 8px;
-    border-radius: 5px;
-    font-weight: bold;
-    margin: 0 2px;
-  }
-
-  .win-high { background: #4caf5030; color: #2e7d32; }
-  .win-medium { background: #ff980030; color: #e65100; }
-  .win-low { background: #f4433630; color: #c62828; }
-
-  #board {
-    background: rgba(0, 0, 0, 0.05);
-    padding: 15px;
-    border-radius: 15px;
-    display: inline-block;
-    touch-action: manipulation;
-    margin-bottom: 20px;
-  }
-
-  .row {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .row:last-child {
-    margin-bottom: 0;
-  }
-
-  .cell {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 50%;
-    cursor: pointer;
-    transition: transform 0.15s ease;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    position: relative;
-    user-select: none;
-  }
-
-  .cell:hover:not(.pressed) {
-    transform: scale(1.1);
-  }
-
-  .cell:active:not(.pressed) {
-    transform: scale(0.95);
-  }
-
-  .cell.pressed {
-    background: linear-gradient(135deg, #444 0%, #222 100%);
-    cursor: default;
-    transform: scale(0.85);
-    box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.4);
-  }
-
-  .cell.pressed::after {
-    content: '✓';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
-  }
-
-  .controls {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  button {
-    padding: 15px 30px;
-    font-size: 1.1em;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: bold;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    font-size: 1.3em;
-    padding: 18px 40px;
-  }
-
-  .btn-secondary {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: white;
-  }
-
-  button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
-  }
-
-  button:active:not(:disabled) {
-    transform: translateY(0);
-  }
-
-  button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal.show {
-    display: flex;
-  }
-
-  .modal-content {
-    background: white;
-    padding: 40px;
-    border-radius: 20px;
-    text-align: center;
-    max-width: 400px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  }
-
-  .modal h2 {
-    margin: 0 0 20px 0;
-    color: #333;
-    font-size: 2em;
-  }
-
-  .winner-text {
-    font-size: 1.2em;
-    color: #666;
-    margin-bottom: 30px;
-    white-space: pre-line;
-  }
-
-  .rules {
-    text-align: left;
-    margin-top: 20px;
-    padding: 15px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 10px;
-    font-size: 0.9em;
-    line-height: 1.6;
-  }
-
-  .rules h3 {
-    margin: 0 0 10px 0;
-    color: #333;
-  }
-
-  .rules ul {
-    margin: 0;
-    padding-left: 20px;
-  }
-
-  /* Online multiplayer panel */
-  .online-panel {
-    margin-top: 20px;
-    padding: 15px;
-    background: rgba(0,0,0,0.05);
-    border-radius: 10px;
-    font-size: 0.9em;
-  }
-
-  .online-panel input {
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    width: 100%;
-    margin-bottom: 10px;
-    font-size: 0.9em;
-  }
-
-  .online-status {
-    margin-top: 8px;
-    font-size: 0.85em;
-    color: #555;
-    word-break: break-all;
-  }
-
-  @media (max-width: 480px) {
-    .cell {
-      width: 40px;
-      height: 40px;
-    }
-    
-    .container {
-      padding: 20px;
-    }
-    
-    .mode-buttons {
-      grid-template-columns: 1fr;
-    }
-  }
-  </style>
+        .player-tag {
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+        }
+        .player-tag.active { border: 1px solid var(--accent); background: rgba(0,242,255,0.1); }
+    </style>
 </head>
 <body>
-<div class="container">
-  <h1>Last Touch Loses</h1>
-  <p class="subtitle">Strategic elimination game</p>
-  
-  <div class="screen active" id="menuScreen">
-    <div class="menu-section">
-      <h2>Select Game Mode</h2>
-      <div class="mode-buttons">
-        <button class="mode-btn" onclick="showDifficultyScreen()">Single Player<br>(vs AI)</button>
-        <button class="mode-btn" onclick="startGame(2)">2 Players</button>
-        <button class="mode-btn" onclick="startGame(3)">3 Players</button>
-        <button class="mode-btn" onclick="startGame(4)">4 Players</button>
-        <button class="mode-btn" onclick="startGame(5)">5 Players</button>
-        <button class="mode-btn" onclick="showOnlineScreen()">Online Multiplayer</button>
-      </div>
+
+    <div class="app-shell">
+        <header>
+            <div class="logo"><i class="fas fa-microchip"></i> MATRIX.100</div>
+            <div id="status-text" style="font-size: 0.7rem; color: var(--text-dim);">SYSTEM READY</div>
+        </header>
+
+        <!-- Screen: Menu -->
+        <section id="screen-menu" class="screen active">
+            <div class="menu-grid">
+                <div class="card" onclick="initGame('ai')">
+                    <i class="fas fa-brain"></i>
+                    <h3>SOLO VS AI</h3>
+                    <p>Defeat the adaptive logic engine.</p>
+                </div>
+                <div class="card" onclick="showScreen('screen-local-setup')">
+                    <i class="fas fa-users"></i>
+                    <h3>LOCAL MULTI</h3>
+                    <p>2-4 players on one screen.</p>
+                </div>
+                <div class="card" onclick="showOnlineSetup()">
+                    <i class="fas fa-globe"></i>
+                    <h3>ONLINE LOBBY</h3>
+                    <p>Connect via secure room code.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Screen: Local Setup -->
+        <section id="screen-local-setup" class="screen">
+            <div style="margin: auto; text-align: center;">
+                <h2>SELECT PLAYER COUNT</h2>
+                <div style="display: flex; gap: 20px; margin: 30px 0;">
+                    <button class="btn btn-outline" onclick="initGame('local', 2)">2 PLAYERS</button>
+                    <button class="btn btn-outline" onclick="initGame('local', 3)">3 PLAYERS</button>
+                    <button class="btn btn-outline" onclick="initGame('local', 4)">4 PLAYERS</button>
+                </div>
+                <button class="btn btn-outline" onclick="showScreen('screen-menu')">BACK</button>
+            </div>
+        </section>
+
+        <!-- Screen: Online Setup -->
+        <section id="screen-online-setup" class="screen">
+            <div style="margin: auto; width: 400px; text-align: center;">
+                <h2>ONLINE LOBBY</h2>
+                <div class="panel" style="margin: 20px 0;">
+                    <p style="font-size: 0.7rem; color: var(--text-dim);">YOUR CODE</p>
+                    <div id="my-id" class="room-code">GENERATING...</div>
+                    <button class="btn btn-outline" style="font-size: 0.6rem;" onclick="copyID()">COPY</button>
+                </div>
+                <input type="text" id="join-id" placeholder="ENTER ROOM CODE" style="width: 100%; padding: 15px; background: #000; border: 1px solid #333; color: #fff; margin-bottom: 10px;">
+                <button class="btn btn-accent" style="width: 100%;" onclick="connectOnline()">JOIN ROOM</button>
+                <button class="btn btn-outline" style="width: 100%; margin-top: 10px;" onclick="location.reload()">CANCEL</button>
+            </div>
+        </section>
+
+        <!-- Screen: Game -->
+        <section id="screen-game" class="screen">
+            <div class="game-layout">
+                
+                <!-- Left: AI & Difficulty -->
+                <div class="sidebar">
+                    <div class="panel">
+                        <label style="font-size: 0.7rem; color: var(--accent);">AI COGNITION LEVEL</label>
+                        <div class="slider-container">
+                            <input type="range" min="1" max="20" value="10" class="slider" id="ai-difficulty">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-top: 5px;">
+                                <span>LV.1</span>
+                                <span id="diff-val" style="color: var(--accent);">10</span>
+                                <span>LV.20</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column;">
+                        <label style="font-size: 0.7rem; color: #00ff88; margin-bottom: 5px;">DECISION TERMINAL</label>
+                        <div id="ai-log" class="ai-terminal">
+                            <p>> SYSTEM INITIALIZED...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Center: Board -->
+                <div class="board-container">
+                    <div id="grid" class="grid-10"></div>
+                </div>
+
+                <!-- Right: Stats & Controls -->
+                <div class="sidebar">
+                    <div class="panel">
+                        <label style="font-size: 0.7rem; color: var(--accent);">OPERATIVES</label>
+                        <div id="player-list" style="margin-top: 10px;"></div>
+                    </div>
+                    
+                    <div class="panel" style="margin-top: auto;">
+                        <button id="end-turn-btn" class="btn btn-accent" style="width: 100%; margin-bottom: 10px;" onclick="processTurn()" disabled>END TURN</button>
+                        <button class="btn btn-outline" style="width: 100%;" onclick="location.reload()">ABORT</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
     </div>
-    
-    <div class="rules">
-      <h3>How to Play:</h3>
-      <ul>
-        <li>Click cells in any ONE row per turn</li>
-        <li>Mark as many cells as you want in that row</li>
-        <li>Press "End Turn" when done</li>
-        <li>Player who marks the LAST cell loses!</li>
-      </ul>
-    </div>
-  </div>
-  
-  <div class="screen" id="difficultyScreen">
-    <h2>Choose Your Opponent</h2>
-    
-    <div class="difficulty-display">
-      <p class="difficulty-number" id="difficultyNumber">1</p>
-      <p class="difficulty-label" id="difficultyLabel">Sleepy Snail</p>
-      <p class="difficulty-description" id="difficultyDesc">Actively avoids winning (0-10% win rate)</p>
-    </div>
-    
-    <div class="slider-container">
-      <input type="range" min="1" max="10" value="1" class="slider" id="difficultySlider">
-    </div>
-    
-    <div class="controls">
-      <button class="btn-primary" onclick="startAIGame()">Start Game</button>
-      <button class="btn-secondary" onclick="backToMainMenu()">Back</button>
-    </div>
-  </div>
 
-  <!-- Online multiplayer setup screen -->
-  <div class="screen" id="onlineScreen">
-    <h2>Online Multiplayer</h2>
-    <div class="online-panel">
-      <p style="margin-top:0;"><strong>Create a game</strong> and share the Game ID, or <strong>join</strong> an existing one.</p>
-      <div class="controls" style="margin-bottom:10px;">
-        <button class="btn-primary" onclick="createOnlineGame()">Create Game</button>
-      </div>
-      <div>
-        <label for="joinGameId"><strong>Join Game ID:</strong></label>
-        <input id="joinGameId" placeholder="Enter game ID from your friend">
-        <div class="controls" style="margin-top:5px;">
-          <button class="btn-secondary" onclick="joinOnlineGame()">Join Game</button>
-        </div>
-      </div>
-      <div class="online-status" id="onlineStatus">Not connected.</div>
+    <!-- Win Overlay -->
+    <div id="win-overlay" class="overlay">
+        <h1 style="font-size: 4rem; color: var(--danger);">DISCONNECTED</h1>
+        <p id="win-message" style="margin: 20px 0 40px 0; font-size: 1.2rem;"></p>
+        <button class="btn btn-accent" onclick="location.reload()">RETURN TO MENU</button>
     </div>
 
-    <div class="controls" style="margin-top:15px;">
-      <button class="btn-secondary" onclick="backToMainMenu()">Back</button>
-    </div>
-  </div>
-  
-  <div class="screen" id="gameScreen">
-    <div class="game-info">
-      <div class="turn-indicator" id="turn">Player 1's Turn</div>
-      <div class="moves-counter" id="moves">Moves: 0</div>
-    </div>
-    
-    <div id="board"></div>
-    
-    <div class="ai-commentary" id="aiCommentary" style="display: none;">
-      <div class="ai-commentary-title">🤖 AI Thinking...</div>
-      <div class="ai-commentary-text" id="aiCommentaryText">Waiting for AI turn...</div>
-    </div>
-    
-    <div class="controls">
-      <button class="btn-primary" id="endTurnBtn" onclick="endTurnManual()" disabled>End Turn</button>
-    </div>
-    
-    <div class="controls" style="margin-top: 15px;">
-      <button class="btn-secondary" onclick="resetGame()">New Game</button>
-      <button class="btn-secondary" onclick="backToMainMenu()">Main Menu</button>
-    </div>
-  </div>
-</div>
+    <script>
+        const GAME = {
+            board: [],
+            players: [],
+            turn: 0,
+            activeRow: -1,
+            selected: [],
+            mode: 'ai', // ai, local, online
+            difficulty: 10,
+            peer: null,
+            conn: null,
+            isHost: false
+        };
 
-<div class="modal" id="gameOverModal">
-  <div class="modal-content">
-    <h2>Game Over!</h2>
-    <p class="winner-text" id="winnerText"></p>
-    <button class="btn-primary" onclick="resetGame()">Play Again</button>
-    <button class="btn-secondary" onclick="backToMainMenu()" style="margin-top: 10px;">Main Menu</button>
-  </div>
-</div>
+        // --- INIT ---
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
 
-<script>
-const ROWS = 5, COLS = 7;
-let board = [], currentPlayer = 1, activeRow = null, moveCount = 0;
-let markedThisTurn = false, numPlayers = 2, isAIMode = false, aiDifficulty = 1, turnStartBoard = [];
+        function initGame(mode, pCount = 2) {
+            GAME.mode = mode;
+            GAME.board = Array(10).fill().map(() => Array(10).fill(true));
+            GAME.turn = 0;
+            GAME.activeRow = -1;
+            GAME.selected = [];
 
-// Online multiplayer state
-let isOnlineMode = false;
-let peer = null;
-let conn = null;
-let isHost = false; // true = Player 1 (host), false = Player 2 (guest)
+            if(mode === 'ai') {
+                GAME.players = [{name: 'USER', type: 'h'}, {name: 'CPU', type: 'ai'}];
+            } else if (mode === 'local') {
+                GAME.players = [];
+                for(let i=1; i<=pCount; i++) GAME.players.push({name: `P.0${i}`, type: 'h'});
+            }
 
-const difficultyNames = [
-  {name:"Sleepy Snail",desc:"Actively avoids winning (0-10% win rate)",target:5},
-  {name:"Confused Puppy",desc:"Prefers bad moves (10-20% win rate)",target:15},
-  {name:"Distracted Student",desc:"Makes mediocre choices (20-35% win rate)",target:27},
-  {name:"Coffee-Deprived Intern",desc:"Below average play (35-45% win rate)",target:40},
-  {name:"Weekend Warrior",desc:"Coin flip strategy (45-55% win rate)",target:50},
-  {name:"Chess Club Member",desc:"Above average play (55-65% win rate)",target:60},
-  {name:"Math Professor",desc:"Strong strategic play (65-75% win rate)",target:70},
-  {name:"Grandmaster",desc:"Expert level (75-85% win rate)",target:80},
-  {name:"Supercomputer",desc:"Near-perfect play (85-95% win rate)",target:90},
-  {name:"Omniscient AI",desc:"Optimal strategy (95-100% win rate)",target:97}
-];
+            showScreen('screen-game');
+            buildBoard();
+            updateUI();
+        }
 
-const commentaryTemplates = {
-  analyzing:["Let me evaluate the board position...","Calculating all possible moves...","Analyzing the game tree...","Running strategic simulations...","Considering my options..."],
-  highWin:["Found a winning move with {percent}% success rate! Row {row}, taking {count} cell(s).","Excellent! This move gives me {percent}% chance to win. Selecting row {row}, {count} cell(s).","Perfect position. {percent}% win probability on row {row}, marking {count} cell(s).","Strong move detected: row {row}, {count} cell(s) - {percent}% win chance!"],
-  mediumWin:["Decent option here. Row {row}, {count} cell(s) gives me {percent}% to win.","This looks reasonable - row {row}, taking {count} with {percent}% success rate.","Going with row {row}, {count} cell(s). About {percent}% chance this works out.","Row {row} seems okay. Taking {count} cell(s) for {percent}% win probability."],
-  lowWin:["Not ideal, but trying row {row}, {count} cell(s) - only {percent}% win chance.","Struggling here. Row {row}, taking {count} gives me {percent}% to win.","This position is tough. Row {row}, {count} cell(s) - just {percent}% success rate.","Limited options. Row {row}, {count} cell(s) at {percent}% win probability."],
-  deliberately_bad:["Hmm, row {row} looks terrible... perfect! Taking {count} cell(s) ({percent}% win rate).","I should probably avoid row {row}... so that's exactly where I'll go! {count} cell(s) for {percent}%.","Row {row}, {count} cell(s) - this gives me only {percent}% to win. Ideal!","The worst move is row {row}, {count} cell(s) at {percent}%. Let's do it!"]
-};
+        function buildBoard() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for(let r=0; r<10; r++) {
+                for(let c=0; c<10; c++) {
+                    const div = document.createElement('div');
+                    div.className = 'cell';
+                    if(!GAME.board[r][c]) div.classList.add('taken');
+                    div.onclick = () => handleCellClick(r, c);
+                    grid.appendChild(div);
+                }
+            }
+        }
 
-function initSlider(){
-  const s=document.getElementById('difficultySlider');
-  if(s){
-    s.addEventListener('input',function(){
-      const l=parseInt(this.value);
-      document.getElementById('difficultyNumber').textContent=l;
-      document.getElementById('difficultyLabel').textContent=difficultyNames[l-1].name;
-      document.getElementById('difficultyDesc').textContent=difficultyNames[l-1].desc;
-    });
-  }
-}
+        // --- CORE LOGIC ---
+        function handleCellClick(r, c) {
+            // Turn validation
+            if(GAME.mode === 'online') {
+                if(GAME.isHost && GAME.turn !== 0) return;
+                if(!GAME.isHost && GAME.turn !== 1) return;
+            }
+            if(GAME.players[GAME.turn].type === 'ai') return;
 
-function showDifficultyScreen(){
-  document.getElementById('menuScreen').classList.remove('active');
-  document.getElementById('difficultyScreen').classList.add('active');
-  initSlider();
-}
+            if(!GAME.board[r][c]) return;
+            if(GAME.activeRow !== -1 && GAME.activeRow !== r) return;
 
-function showOnlineScreen(){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('onlineScreen').classList.add('active');
-  document.getElementById('onlineStatus').textContent = "Not connected.";
-}
+            const idx = GAME.selected.findIndex(s => s.r === r && s.c === c);
+            if(idx > -1) {
+                GAME.selected.splice(idx, 1);
+                if(GAME.selected.length === 0) GAME.activeRow = -1;
+            } else {
+                GAME.activeRow = r;
+                GAME.selected.push({r, c});
+            }
 
-function startAIGame(){
-  aiDifficulty=parseInt(document.getElementById('difficultySlider').value);
-  numPlayers=2;
-  isAIMode=true;
-  isOnlineMode=false;
-  initGame();
-}
+            document.getElementById('end-turn-btn').disabled = GAME.selected.length === 0;
+            refreshCells();
+        }
 
-function startGame(p){
-  numPlayers=p;
-  isAIMode=false;
-  isOnlineMode=false;
-  initGame();
-}
+        function refreshCells() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach((cell, i) => {
+                const r = Math.floor(i / 10);
+                const c = i % 10;
+                cell.classList.remove('selected');
+                if(GAME.selected.some(s => s.r === r && s.c === c)) cell.classList.add('selected');
+            });
+        }
 
-function initGame(){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('gameScreen').classList.add('active');
-  resetGame();
-}
+        function processTurn() {
+            GAME.selected.forEach(s => GAME.board[s.r][s.c] = false);
+            GAME.selected = [];
+            GAME.activeRow = -1;
+            document.getElementById('end-turn-btn').disabled = true;
 
-function backToMainMenu(){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById('menuScreen').classList.add('active');
-  document.getElementById('gameOverModal').classList.remove('show');
-}
+            buildBoard();
+            if(checkWin()) return;
 
-// Online: host / join
-function createOnlineGame(){
-  isOnlineMode = true;
-  isHost = true;
-  numPlayers = 2;
-  isAIMode = false;
+            GAME.turn = (GAME.turn + 1) % GAME.players.length;
+            updateUI();
 
-  if(peer){
-    peer.destroy();
-    peer = null;
-  }
+            if(GAME.mode === 'online') sync();
+            if(GAME.players[GAME.turn].type === 'ai') setTimeout(runAI, 1000);
+        }
 
-  const statusEl = document.getElementById('onlineStatus');
-  statusEl.textContent = "Creating game...";
+        function checkWin() {
+            const remaining = GAME.board.flat().filter(x => x === true).length;
+            if(remaining === 0) {
+                const loser = GAME.players[GAME.turn].name;
+                document.getElementById('win-message').innerText = `${loser} HAS BEEN ELIMINATED BY THE LAST CELL.`;
+                document.getElementById('win-overlay').classList.add('active');
+                return true;
+            }
+            return false;
+        }
 
-  peer = new Peer(undefined, {
-    debug: 2
-  });
+        function updateUI() {
+            const list = document.getElementById('player-list');
+            list.innerHTML = '';
+            GAME.players.forEach((p, i) => {
+                const div = document.createElement('div');
+                div.className = `player-tag ${GAME.turn === i ? 'active' : ''}`;
+                div.innerHTML = `<span>${p.name}</span><span>${GAME.turn === i ? 'ACTIVE' : '--'}</span>`;
+                list.appendChild(div);
+            });
+        }
 
-  peer.on('open', id => {
-statusEl.textContent = `Game created! Your Game ID: ${id}\nWaiting for a player to join...`;  
-     });
+        // --- AI LOGIC (NIM SUM) ---
+        function runAI() {
+            const log = (msg) => {
+                const term = document.getElementById('ai-log');
+                const p = document.createElement('p');
+                p.innerText = `> ${msg}`;
+                term.prepend(p);
+            };
 
-  peer.on('connection', c => {
-    conn = c;
-    setupConnection();
-    statusEl.textContent = "Player connected! Starting game...";
-    setTimeout(()=>{
-      initGame();
-      // Host is Player 1, guest is Player 2
-      currentPlayer = 1;
-      updateTurnDisplay();
-    }, 500);
-  });
+            log("ANALYZING MATRIX...");
+            const counts = GAME.board.map(row => row.filter(c => c).length);
+            
+            // Nim Sum Strategy
+            let nimSum = counts.reduce((a, b) => a ^ b, 0);
+            log(`NIM_SUM DETECTED: ${nimSum.toString(2).padStart(4, '0')}`);
 
-  peer.on('error', err => {
-    statusEl.textContent = "Peer error: " + err;
-  });
-}
+            let targetRow = -1;
+            let takeCount = 0;
 
-function joinOnlineGame(){
-  const gameId = document.getElementById('joinGameId').value.trim();
-  const statusEl = document.getElementById('onlineStatus');
-  if(!gameId){
-    statusEl.textContent = "Please enter a Game ID.";
-    return;
-  }
+            // Difficulty check: Probability of making the perfect move
+            const perfectMove = Math.random() * 20 < GAME.difficulty;
 
-  isOnlineMode = true;
-  isHost = false;
-  numPlayers = 2;
-  isAIMode = false;
+            if(!perfectMove) {
+                log("COGNITION ERROR: MAKING SUB-OPTIMAL MOVE");
+                targetRow = counts.findIndex(c => c > 0);
+                takeCount = 1;
+            } else {
+                // Misere Play Strategy (Last one loses)
+                const pilesAboveOne = counts.filter(c => c > 1).length;
+                if(pilesAboveOne <= 1) {
+                    log("END-GAME PROTOCOL ENGAGED");
+                    const bigIdx = counts.findIndex(c => c > 1);
+                    const ones = counts.filter(c => c === 1).length;
+                    if(bigIdx === -1) {
+                        targetRow = counts.findIndex(c => c === 1);
+                        takeCount = 1;
+                    } else {
+                        takeCount = (ones % 2 === 0) ? counts[bigIdx] - 1 : counts[bigIdx];
+                        if(takeCount === 0) takeCount = 1;
+                        targetRow = bigIdx;
+                    }
+                } else {
+                    if(nimSum === 0) {
+                        log("STATE IS BALANCED. STALLING...");
+                        targetRow = counts.findIndex(c => c > 0);
+                        takeCount = 1;
+                    } else {
+                        for(let i=0; i<10; i++) {
+                            let target = counts[i] ^ nimSum;
+                            if(target < counts[i]) {
+                                targetRow = i;
+                                takeCount = counts[i] - target;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
-  if(peer){
-    peer.destroy();
-    peer = null;
-  }
+            log(`EXECUTING: ROW ${targetRow+1} | TAKE ${takeCount}`);
+            
+            // Execute AI move
+            let processed = 0;
+            for(let c=0; c<10; c++) {
+                if(GAME.board[targetRow][c] && processed < takeCount) {
+                    GAME.board[targetRow][c] = false;
+                    processed++;
+                }
+            }
 
-  statusEl.textContent = "Connecting to game...";
+            setTimeout(processTurn, 500);
+        }
 
-  peer = new Peer(undefined, {
-    debug: 2
-  });
+        // --- ONLINE LOGIC ---
+        function showOnlineSetup() {
+            showScreen('screen-online-setup');
+            GAME.peer = new Peer();
+            GAME.peer.on('open', id => document.getElementById('my-id').innerText = id);
+            GAME.peer.on('connection', conn => {
+                GAME.conn = conn;
+                GAME.isHost = true;
+                handleConnection();
+            });
+        }
 
-  peer.on('open', id => {
-    conn = peer.connect(gameId);
-    conn.on('open', () => {
-      statusEl.textContent = "Connected! Waiting for host to start the game...";
-      setupConnection();
-      // Start game as Player 2 after a short delay
-      setTimeout(()=>{
-        initGame();
-        currentPlayer = 2; // guest plays as Player 2
-        updateTurnDisplay();
-      }, 500);
-    });
-  });
+        function connectOnline() {
+            const id = document.getElementById('join-id').value;
+            GAME.conn = GAME.peer.connect(id);
+            GAME.isHost = false;
+            handleConnection();
+        }
 
-  peer.on('error', err => {
-    statusEl.textContent = "Peer error: " + err;
-  });
-}
+        function handleConnection() {
+            GAME.mode = 'online';
+            GAME.players = [{name: 'HOST', type: 'h'}, {name: 'GUEST', type: 'h'}];
+            GAME.conn.on('data', data => {
+                if(data.type === 'SYNC') {
+                    GAME.board = data.board;
+                    GAME.turn = data.turn;
+                    buildBoard();
+                    updateUI();
+                    checkWin();
+                }
+            });
+            initGame('online');
+        }
 
-function setupConnection(){
-  if(!conn) return;
-  conn.on('data', data => {
-    handleOnlineMessage(data);
-  });
-  conn.on('close', () => {
-    const statusEl = document.getElementById('onlineStatus');
-    if(statusEl) statusEl.textContent = "Disconnected.";
-    alert("Connection closed.");
-    isOnlineMode = false;
-  });
-}
+        function sync() {
+            if(GAME.conn) GAME.conn.send({ type: 'SYNC', board: GAME.board, turn: GAME.turn });
+        }
 
-function sendOnlineMessage(msg){
-  if(isOnlineMode && conn && conn.open){
-    conn.send(msg);
-  }
-}
+        function copyID() {
+            navigator.clipboard.writeText(document.getElementById('my-id').innerText);
+            alert("CODE COPIED");
+        }
 
-// Handle messages from remote
-function handleOnlineMessage(msg){
-  if(msg.type === 'stateSync'){
-    board = msg.board;
-    turnStartBoard = msg.turnStartBoard;
-    currentPlayer = msg.currentPlayer;
-    moveCount = msg.moveCount;
-    redrawBoardFromState();
-    updateTurnDisplay();
-    document.getElementById('moves').textContent = `Moves: ${moveCount}`;
-  } else if(msg.type === 'gameOver'){
-    board = msg.board;
-    redrawBoardFromState();
-    currentPlayer = msg.currentPlayer;
-    showGameOver();
-  } else if(msg.type === 'reset'){
-    resetGameLocalOnly();
-  }
-}
+        // --- UI EVENTS ---
+        document.getElementById('ai-difficulty').oninput = function() {
+            GAME.difficulty = this.value;
+            document.getElementById('diff-val').innerText = this.value;
+        };
 
-// Repaint board from board[][] after sync
-function redrawBoardFromState(){
-  const b=document.getElementById('board');
-  const cells = b.querySelectorAll('.cell');
-  cells.forEach(cell=>{
-    const r=parseInt(cell.dataset.row);
-    const c=parseInt(cell.dataset.col);
-    if(board[r][c]){
-      cell.classList.add('pressed');
-    }else{
-      cell.classList.remove('pressed');
-    }
-  });
-}
-
-function createBoard(){
-  const b=document.getElementById('board');
-  b.innerHTML='';
-  board=[];
-  turnStartBoard=[];
-  for(let r=0;r<ROWS;r++){
-    const rd=document.createElement('div');
-    rd.className='row';
-    board[r]=[];
-    turnStartBoard[r]=[];
-    for(let c=0;c<COLS;c++){
-      const cell=document.createElement('div');
-      cell.className='cell';
-      cell.dataset.row=r;
-      cell.dataset.col=c;
-      cell.addEventListener('click',handleCellClick);
-      rd.appendChild(cell);
-      board[r][c]=false;
-      turnStartBoard[r][c]=false;
-    }
-    b.appendChild(rd);
-  }
-}
-
-function handleCellClick(){
-  // In online mode, only allow local player to act on their turn
-  if(isOnlineMode){
-    const myPlayer = isHost ? 1 : 2;
-    if(currentPlayer !== myPlayer) return;
-  }
-
-  if(isAIMode && currentPlayer===2) return;
-  const r=parseInt(this.dataset.row),c=parseInt(this.dataset.col);
-  if(turnStartBoard[r][c])return;
-  if(board[r][c]&&!turnStartBoard[r][c]){
-    deselectCell(r,c);
-    return;
-  }
-  if(board[r][c])return;
-  if(activeRow===null)activeRow=r;
-  if(r!==activeRow)return;
-  if(markedThisTurn){
-    const mc=[];
-    for(let col=0;col<COLS;col++){
-      if(board[r][col]&&!turnStartBoard[r][col])mc.push(col);
-    }
-    let adj=false;
-    for(let m of mc){
-      if(Math.abs(c-m)===1){
-        adj=true;
-        break;
-      }
-    }
-    if(!adj)return;
-  }
-  pressCell(r,c);
-  updateEndTurnButton();
-}
-
-function deselectCell(r,c){
-  board[r][c]=false;
-  const cell=document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
-  if(cell)cell.classList.remove('pressed');
-  let any=false;
-  for(let col=0;col<COLS;col++){
-    if(board[r][col]&&!turnStartBoard[r][col]){
-      any=true;
-      break;
-    }
-  }
-  if(!any){
-    markedThisTurn=false;
-    activeRow=null;
-  }
-  updateEndTurnButton();
-}
-
-function updateEndTurnButton(){
-  let has=false;
-  if(activeRow!==null){
-    for(let c=0;c<COLS;c++){
-      if(board[activeRow][c]&&!turnStartBoard[activeRow][c]){
-        has=true;
-        break;
-      }
-    }
-  }
-  document.getElementById('endTurnBtn').disabled=!has;
-}
-
-function pressCell(r,c){
-  if(board[r][c])return;
-  board[r][c]=true;
-  markedThisTurn=true;
-  const cell=document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
-  if(cell)cell.classList.add('pressed');
-}
-
-function endTurnManual(){
-  if(!markedThisTurn)return;
-
-  turnStartBoard=JSON.parse(JSON.stringify(board));
-  if(isGameOver()){
-    // send game over to opponent if online
-    if(isOnlineMode){
-      sendOnlineMessage({
-        type:'gameOver',
-        board,
-        currentPlayer
-      });
-    }
-    showGameOver();
-    return;
-  }
-  moveCount++;
-  document.getElementById('moves').textContent=`Moves: ${moveCount}`;
-  currentPlayer=(currentPlayer%numPlayers)+1;
-  updateTurnDisplay();
-  markedThisTurn=false;
-  activeRow=null;
-  document.getElementById('endTurnBtn').disabled=true;
-
-  // sync state to remote in online mode
-  if(isOnlineMode){
-    sendOnlineMessage({
-      type:'stateSync',
-      board,
-      turnStartBoard,
-      currentPlayer,
-      moveCount
-    });
-  }
-
-  if(isAIMode && currentPlayer===2) setTimeout(aiMove,800);
-}
-
-function updateTurnDisplay(){
-  if(isOnlineMode){
-    const myPlayer = isHost ? 1 : 2;
-    const meStr = `You (P${myPlayer})`;
-    const theirStr = `Opponent (P${myPlayer===1?2:1})`;
-    const label = currentPlayer===myPlayer ? `${meStr}'s Turn` : `${theirStr}'s Turn`;
-    document.getElementById('turn').textContent = label;
-  } else {
-    document.getElementById('turn').textContent=isAIMode && currentPlayer===2?"AI's Turn":`Player ${currentPlayer}'s Turn`;
-  }
-}
-
-function aiMove(){
-  const c=document.getElementById('aiCommentary'),ct=document.getElementById('aiCommentaryText');
-  c.style.display='block';
-  c.classList.add('active');
-  ct.innerHTML=commentaryTemplates.analyzing[Math.floor(Math.random()*commentaryTemplates.analyzing.length)];
-  setTimeout(()=>{
-    const res=getAIMoveWithCommentary();
-    if(res){
-      ct.innerHTML=res.commentary;
-      setTimeout(()=>{
-        activeRow=res.move.row;
-        for(let col of res.move.cols)pressCell(res.move.row,col);
-        setTimeout(()=>{
-          if(isGameOver()){
-            showGameOver();
-          }else{
-            moveCount++;
-            document.getElementById('moves').textContent=`Moves: ${moveCount}`;
-            currentPlayer=1;
-            updateTurnDisplay();
-            markedThisTurn=false;
-            activeRow=null;
-          }
-        },600);
-      },800);
-    }
-  },600);
-}
-
-function getAIMoveWithCommentary(){
-  const am=getAvailableMoves();
-  if(am.length===0)return null;
-  const apm=[];
-  for(let m of am){
-    const segs=getContiguousSegments(m.row,m.cols);
-    for(let seg of segs){
-      for(let take=1;take<=seg.length;take++){
-        const tb=JSON.parse(JSON.stringify(board));
-        for(let i=0;i<take;i++)tb[m.row][seg[i]]=true;
-        const wc=evaluateWinProbability(tb);
-        apm.push({row:m.row,cols:seg.slice(0,take),winChance:wc,count:take});
-      }
-    }
-  }
-  apm.sort((a,b)=>a.winChance-b.winChance);
-  const twr=difficultyNames[aiDifficulty-1].target;
-  let sm;
-  if(aiDifficulty<=3){
-    const lm=apm.filter(m=>m.winChance<30);
-    sm=lm.length>0?lm[Math.floor(Math.random()*Math.min(lm.length,3))]:apm[0];
-  }else{
-    let cm=apm[0],cd=Math.abs(apm[0].winChance-twr);
-    for(let m of apm){
-      const d=Math.abs(m.winChance-twr);
-      if(d<cd){
-        cd=d;
-        cm=m;
-      }
-    }
-    sm=cm;
-  }
-  const pct=Math.round(sm.winChance);
-  let tpl,wc;
-  if(aiDifficulty<=2){
-    tpl=commentaryTemplates.deliberately_bad;
-    wc='win-low';
-  }else if(pct>=70){
-    tpl=commentaryTemplates.highWin;
-    wc='win-high';
-  }else if(pct>=40){
-    tpl=commentaryTemplates.mediumWin;
-    wc='win-medium';
-  }else{
-    tpl=commentaryTemplates.lowWin;
-    wc='win-low';
-  }
-  const tmp=tpl[Math.floor(Math.random()*tpl.length)];
-  const com=tmp
-    .replace('{percent}',`<span class="${wc}">${pct}%</span>`)
-    .replace('{row}',sm.row+1)
-    .replace('{count}',sm.count);
-  return{move:{row:sm.row,cols:sm.cols},commentary:com};
-}
-
-function getContiguousSegments(r,cols){
-  const segs=[];
-  let cs=[];
-  for(let i=0;i<cols.length;i++){
-    if(cs.length===0||cols[i]===cs[cs.length-1]+1){
-      cs.push(cols[i]);
-    }else{
-      segs.push([...cs]);
-      cs=[cols[i]];
-    }
-  }
-  if(cs.length>0)segs.push(cs);
-  return segs;
-}
-
-function evaluateWinProbability(tb){
-  const ns=calculateTestBoardNimSum(tb);
-  if(ns===0)return 5;
-  let ac=0,rwc=0;
-  for(let r=0;r<ROWS;r++){
-    let cnt=0;
-    for(let c=0;c<COLS;c++){
-      if(!tb[r][c]){
-        cnt++;
-        ac++;
-      }
-    }
-    if(cnt>0)rwc++;
-  }
-  if(ac===1)return 95;
-  if(ac===2)return 90;
-  if(rwc===1)return ac%2===0?90:20;
-  const nf=ns>0?30:-25;
-  return Math.max(5,Math.min(95,50+nf+(Math.random()-0.5)*15));
-}
-
-function getAvailableMoves(){
-  const mv=[];
-  for(let r=0;r<ROWS;r++){
-    const rc=[];
-    for(let c=0;c<COLS;c++){
-      if(!board[r][c])rc.push(c);
-    }
-    if(rc.length>0)mv.push({row:r,cols:rc});
-  }
-  return mv;
-}
-
-function calculateTestBoardNimSum(tb){
-  let ns=0;
-  for(let r=0;r<ROWS;r++){
-    let cnt=0;
-    for(let c=0;c<COLS;c++){
-      if(!tb[r][c])cnt++;
-    }
-    ns^=cnt;
-  }
-  return ns;
-}
-
-function isGameOver(){
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      if(!board[r][c])return false;
-    }
-  }
-  return true;
-}
-
-function showGameOver(){
-  let wt;
-  if(isOnlineMode){
-    const myPlayer = isHost ? 1 : 2;
-    const loser = currentPlayer;
-    const winner = loser===1?2:1;
-    const result = winner===myPlayer ? "You win! 🎉" : "You lose!";
-    wt = `Player ${loser} marked the last cell!
-
-Player ${winner} wins! ${result}`;
-  } else if(isAIMode){
-    if(currentPlayer===1)wt="You marked the last cell!
-
-😈 AI wins!";
-    else wt="AI marked the last cell!
-
-🎉 You win!
-
-You beat "+difficultyNames[aiDifficulty-1].name+"!";
-  } else {
-    const w=currentPlayer===1?numPlayers:currentPlayer-1;
-    wt=`Player ${currentPlayer} marked the last cell!
-
-Player ${w} wins! 🎉`;
-  }
-  document.getElementById('winnerText').textContent=wt;
-  document.getElementById('gameOverModal').classList.add('show');
-}
-
-function resetGameLocalOnly(){
-  currentPlayer=1;
-  moveCount=0;
-  activeRow=null;
-  markedThisTurn=false;
-  turnStartBoard=[];
-  updateTurnDisplay();
-  document.getElementById('moves').textContent="Moves: 0";
-  document.getElementById('gameOverModal').classList.remove('show');
-  document.getElementById('endTurnBtn').disabled=true;
-  const c=document.getElementById('aiCommentary');
-  if(c){
-    c.style.display='none';
-    c.classList.remove('active');
-  }
-  createBoard();
-}
-
-function resetGame(){
-  resetGameLocalOnly();
-  if(isOnlineMode){
-    sendOnlineMessage({type:'reset'});
-  }
-}
-
-createBoard();
-</script>
+    </script>
 </body>
 </html>
